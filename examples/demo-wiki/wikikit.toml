@@ -1,0 +1,6 @@
+# Demo configuration: a low split threshold so the "Growing" section is split by sub-section.
+[search]
+sources = ["wiki", "raw"]
+
+[split]
+threshold = 4

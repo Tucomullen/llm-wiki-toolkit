@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(raw/**)",
+      "Edit(_meta/LOG.md)"
+    ],
+    "allow": [
+      "Bash(wikikit search:*)",
+      "Bash(wikikit verify:*)",
+      "Bash(wikikit log append:*)",
+      "Bash(wikikit raw save:*)",
+      "Bash(wikikit split-index:*)"
+    ]
+  }
+}

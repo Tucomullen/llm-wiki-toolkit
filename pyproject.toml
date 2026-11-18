@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-wiki-toolkit"
+version = "0.1.0"
+description = "Maintain a Markdown knowledge base managed by AI agents without vector RAG: two-level index, local full-text search, safe writes and an integrity verifier."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "llm-wiki-toolkit contributors" }]
+keywords = ["llm", "wiki", "markdown", "knowledge-base", "fts5", "agents"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = []
+
+[project.optional-dependencies]
+docs = ["python-docx", "pypdf", "python-pptx"]
+
+[project.scripts]
+wikikit = "wikikit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+wikikit = ["templates/*"]
