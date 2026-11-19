@@ -51,3 +51,6 @@ jobs:
           cd "$RUNNER_TEMP/demo"
           wikikit split-index _meta/INDEX.md
           wikikit verify --fail-on-broken
+      - name: First-user journey (installed CLI, fresh wiki, negative cases)
+        shell: bash
+        run: python scripts/first_user_smoke.py
