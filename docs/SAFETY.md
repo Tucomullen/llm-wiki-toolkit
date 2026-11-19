@@ -41,3 +41,38 @@ if your checkout does not retain executable bits, run `chmod +x .githooks/*`.
 
 Review the PR's **Files changed** tab and check for unexpected modifications
 before merging. Do not force-push or merge automatically.
+
+
+## Independent security check (iteration 5)
+
+The required `safety` job runs `scripts/trusted_safety_policy.py` from
+immutable commit `1b474c31c8aa6dff0d5d2a17fc0c8ce75a17a435`, checked out
+to `_trusted_safety/`. This policy is evaluated against Git's base/head
+diff and does **not** execute any script supplied by the proposed PR.
+Local hooks and `scripts/safety_guard.py` remain available for early feedback,
+but are not the authoritative enforcement mechanism.
+
+The pinned policy forbids deletion, type changes, renamed/copied files,
+and edits to existing `raw/` or `_meta/LOG.md` files. It permits normal
+source edits and additions. The policy handles NUL-delimited Git paths,
+rejects malformed inputs, and fails closed when Git cannot produce a diff.
+
+**Security limitation:** GitHub Actions normally loads a `pull_request`
+workflow from the PR's source, so an attacker who can edit that workflow
+may remove the step that checks the immutable policy, or replace the job
+with a no-op that retains the mandatory `safety` status name.
+A pinned script in that PR workflow **does not solve workflow tampering**.
+Before declaring the PR safe to merge, move the authoritative check
+outside PR-controlled workflow definitions, for example into a separate
+restricted policy repository with a trusted workflow that reports a
+distinct required check via GitHub App, or a carefully audited
+`pull_request_target` workflow on protected `main` that executes no
+PR-controlled code and has only read permissions. Confirm a negative
+tampering scenario fails to satisfy the required Ruleset status.
+Do not use `pull_request_target` to build/test the PR with credentials.
+
+The regression tests in `tests/test_trusted_safety_policy.py` verify
+allowed additions/edits and forbidden deletion, type changes, raw/log
+edits, renames/copies, and invalid Git diff records. Their presence in
+the PR does not make them authoritative; the trusted execution must
+explicitly run approved tests.
