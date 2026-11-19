@@ -52,33 +52,105 @@ class TrustedPrPolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             policy.evaluate_files([{"status": "added"}])
 
+    def test_stale_added_locked_workflow_rejected(self):
+        self.assertTrue(policy.evaluate_files(
+            [changed(".github/workflows/trusted-safety.yml", "added")],
+            frozenset({".github/workflows/trusted-safety.yml"}),
+        ))
+
+    def test_stale_added_locked_script_rejected(self):
+        self.assertTrue(policy.evaluate_files(
+            [changed("scripts/trusted_pr_policy.py", "added")],
+            frozenset({"scripts/trusted_pr_policy.py"}),
+        ))
+
+    def test_stale_added_raw_rejected(self):
+        self.assertTrue(policy.evaluate_files(
+            [changed("examples/raw/existing.txt", "added")],
+            frozenset({"examples/raw/existing.txt"}),
+        ))
+
+    def test_genuinely_new_raw_allowed(self):
+        self.assertEqual([], policy.evaluate_files(
+            [changed("examples/raw/new.txt", "added")],
+            frozenset({"examples/raw/other.txt"}),
+        ))
+
+    def mock_api(self, files, *, changed_files=None, current_paths=(), final_sha="current"):
+        """REST response sequence: PR, base ref, commit, tree, files, PR, base ref."""
+        pr = {"base": {"sha": "old-base", "ref": "main"},
+              "head": {"sha": "head"}, "changed_files": len(files) if changed_files is None else changed_files}
+        return [pr,
+                {"object": {"sha": "current"}},
+                {"tree": {"sha": "tree"}},
+                {"truncated": False, "tree": [
+                    {"path": path, "type": "blob"} for path in current_paths
+                ]},
+                files, pr, {"object": {"sha": final_sha}}]
+
+    def test_stale_pr_full_flow_rejects_existing_workflow(self):
+        files = [changed(".github/workflows/trusted-safety.yml", "added")]
+        with patch.object(policy, "get_json", side_effect=self.mock_api(
+            files, current_paths=[".github/workflows/trusted-safety.yml"]
+        )):
+            problems = policy.verify_pr("owner/repo", 1, "old-base", "head", "token")
+        self.assertTrue(problems)
+        self.assertIn("current base", problems[0])
+
+    def test_stale_pr_full_flow_allows_genuinely_new_file(self):
+        files = [changed("wiki/raw/new.txt", "added")]
+        with patch.object(policy, "get_json", side_effect=self.mock_api(
+            files, current_paths=["wiki/raw/existing.txt"]
+        )):
+            self.assertEqual([], policy.verify_pr("owner/repo", 1, "old-base", "head", "token"))
+
     def test_pr_head_race_fails_closed(self):
-        with patch.object(policy, "get_json", return_value={"base": {"sha": "old"}, "head": {"sha": "new"}}):
+        with patch.object(policy, "get_json", return_value={
+            "base": {"sha": "old-base", "ref": "main"}, "head": {"sha": "different"}
+        }):
             with self.assertRaises(ValueError):
-                policy.verify_pr("owner/repo", 1, "old", "expected", "token")
+                policy.verify_pr("owner/repo", 1, "old-base", "expected", "token")
 
     def test_pagination_and_normal_changes(self):
         first = [changed(f"file{i}.txt", "added") for i in range(100)]
         second = [changed("src/program.py", "modified")]
-        with patch.object(policy, "get_json", side_effect=[
-            {"base": {"sha": "base"}, "head": {"sha": "head"}, "changed_files": 101}, first, second
-        ]):
-            self.assertEqual([], policy.verify_pr("owner/repo", 1, "base", "head", "token"))
+        calls = self.mock_api(first + second)
+        calls[4:5] = [first, second]
+        with patch.object(policy, "get_json", side_effect=calls):
+            self.assertEqual([], policy.verify_pr("owner/repo", 1, "old-base", "head", "token"))
 
     def test_mismatched_count_fails_closed(self):
-        with patch.object(policy, "get_json", side_effect=[
-            {"base": {"sha": "base"}, "head": {"sha": "head"}, "changed_files": 2},
-            [changed("README.md", "added")]
-        ]):
+        with patch.object(policy, "get_json", side_effect=self.mock_api(
+            [changed("README.md", "added")], changed_files=2
+        )):
             with self.assertRaises(ValueError):
-                policy.verify_pr("owner/repo", 1, "base", "head", "token")
+                policy.verify_pr("owner/repo", 1, "old-base", "head", "token")
 
     def test_no_files_fails_closed(self):
+        with patch.object(policy, "get_json", side_effect=self.mock_api([])):
+            with self.assertRaises(ValueError):
+                policy.verify_pr("owner/repo", 1, "old-base", "head", "token")
+
+    def test_truncated_tree_fails_closed(self):
+        calls = self.mock_api([changed("README.md", "added")])
+        calls[3]["truncated"] = True
+        with patch.object(policy, "get_json", side_effect=calls):
+            with self.assertRaises(ValueError):
+                policy.verify_pr("owner/repo", 1, "old-base", "head", "token")
+
+    def test_base_moves_during_verification_fails_closed(self):
+        with patch.object(policy, "get_json", side_effect=self.mock_api(
+            [changed("README.md", "added")], final_sha="new-current"
+        )):
+            with self.assertRaises(ValueError):
+                policy.verify_pr("owner/repo", 1, "old-base", "head", "token")
+
+    def test_nonmain_base_fails_closed(self):
         with patch.object(policy, "get_json", side_effect=[
-            {"base": {"sha": "base"}, "head": {"sha": "head"}, "changed_files": 0}, []
+            {"base": {"sha": "old-base", "ref": "other"}, "head": {"sha": "head"}}
         ]):
             with self.assertRaises(ValueError):
-                policy.verify_pr("owner/repo", 1, "base", "head", "token")
+                policy.verify_pr("owner/repo", 1, "old-base", "head", "token")
 
 
 if __name__ == "__main__":
