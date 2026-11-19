@@ -15,6 +15,11 @@ When an agent maintains a wiki over months, four things go wrong: the index grow
 
 ## Install
 
+**New here?** Start with the [cross-platform first-run guide](docs/FIRST_RUN.md). It walks through installation without cloning, creating a wiki, adding a page, searching it and verifying the result.
+
+The commands below install from an **existing local repository checkout** (they do not install the package from PyPI):
+
+
 ```bash
 pip install .            # core, no third-party dependencies
 pip install .[docs]      # adds .docx / .pdf / .pptx text extraction (python-docx, pypdf, python-pptx)
@@ -22,7 +27,7 @@ pip install .[docs]      # adds .docx / .pdf / .pptx text extraction (python-doc
 
 Check it works: `wikikit --version`.
 
-## Quickstart (5 minutes, with the demo)
+## Garden-club demo (requires the repository files)
 
 The repository ships a fictional garden-club wiki in `examples/demo-wiki/` with a monolithic index.
 
