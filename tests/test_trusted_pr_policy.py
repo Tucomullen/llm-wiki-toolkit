@@ -76,12 +76,12 @@ class TrustedPrPolicyTests(unittest.TestCase):
             frozenset({"examples/raw/other.txt"}),
         ))
 
-    def mock_api(self, files, *, changed_files=None, current_paths=(), final_sha="current"):
+    def mock_api(self, files, *, changed_files=None, current_paths=(), final_sha="a" * 40):
         """REST response sequence: PR, base ref, commit, tree, files, PR, base ref."""
         pr = {"base": {"sha": "old-base", "ref": "main"},
               "head": {"sha": "head"}, "changed_files": len(files) if changed_files is None else changed_files}
         return [pr,
-                {"object": {"sha": "current"}},
+                {"object": {"sha": "a" * 40}},
                 {"tree": {"sha": "tree"}},
                 {"truncated": False, "tree": [
                     {"path": path, "type": "blob"} for path in current_paths
