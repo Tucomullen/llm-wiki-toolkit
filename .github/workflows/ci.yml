@@ -6,6 +6,28 @@ on:
   pull_request:
 
 jobs:
+  safety:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Checkout pinned independent guard
+        uses: actions/checkout@v4
+        with:
+          ref: 1b474c31c8aa6dff0d5d2a17fc0c8ce75a17a435
+          path: _trusted_safety
+          persist-credentials: false
+      - name: Check pull request diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python _trusted_safety/scripts/trusted_safety_policy.py --base "$BASE_SHA" --head "$HEAD_SHA"
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
