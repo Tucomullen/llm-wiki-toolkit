@@ -1,0 +1,36 @@
+name: External VCS installation pilot
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/external-vcs-install.yml'
+  workflow_dispatch:
+jobs:
+  install-from-github:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install from GitHub in clean virtual environment (no checkout)
+        shell: bash
+        run: |
+          python -m venv "${{ runner.temp }}/pilot-venv"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            PY="${{ runner.temp }}/pilot-venv/Scripts/python.exe"
+          else
+            PY="${{ runner.temp }}/pilot-venv/bin/python"
+          fi
+          "$PY" -m pip install "git+https://github.com/Tucomullen/llm-wiki-toolkit.git"
+          "$PY" -m wikikit --version
+          "$PY" -m wikikit init "${{ runner.temp }}/first-wiki"
+          "$PY" -m wikikit --root "${{ runner.temp }}/first-wiki" verify --fail-on-broken
+          "$PY" -c 'from pathlib import Path; p=Path(r"${{ runner.temp }}")/"first-wiki"; (p/"wiki"/"First Note.md").write_text("---\ntitle: First Note\n---\n\n# First Note\n\nGarden compost improves soil structure.\n",encoding="utf-8"); (p/"_meta"/"index"/"notes.md").write_text("# Notes\n\n- [[First Note]] — A practical note about compost.\n",encoding="utf-8"); (p/"_meta"/"INDEX.md").write_text("# Index\n\n<!-- KB-COUNT: 1 -->\n\n| Path | Entries in index | Files on disk | Sub-index |\n|------|-----------------:|--------------:|-----------|\n| Notes | 1 | 1 | [notes.md](index/notes.md) |\n",encoding="utf-8")'
+          "$PY" -m wikikit --root "${{ runner.temp }}/first-wiki" search index
+          "$PY" -m wikikit --root "${{ runner.temp }}/first-wiki" search query compost --json
+          "$PY" -m wikikit --root "${{ runner.temp }}/first-wiki" verify --fail-on-broken
