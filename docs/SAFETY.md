@@ -76,3 +76,39 @@ allowed additions/edits and forbidden deletion, type changes, raw/log
 edits, renames/copies, and invalid Git diff records. Their presence in
 the PR does not make them authoritative; the trusted execution must
 explicitly run approved tests.
+
+
+## Iteration 6: trusted base-branch validation (staged, not activated)
+
+`.github/workflows/trusted-safety.yml` uses `pull_request_target` and a
+read-only token (`contents: read`, `pull-requests: read`). Its job
+`trusted-pr-safety` checks out ONLY `github.sha` (the protected default
+branch's commit). It executes `scripts/trusted_pr_policy.py` from that trusted
+checkout and reads PR file metadata through GitHub's API. It does **not**
+check out or execute PR code. The policy checks the event's head/base SHA,
+paginates, compares the listed file count, fails closed on inconsistent API
+responses, and rejects deletions, renames, changes to existing raw/log content,
+or modifications to the trusted workflow/policy once those files exist in main.
+
+**Activation boundary:** GitHub loads `pull_request_target` workflow
+definitions from the default branch, not from the PR. This new workflow is
+currently only on `safety/hooks-ci-smoke-20261119`, so it is NOT enforcing
+PR #1 and cannot be proven active by an ordinary green PR CI run. Do not add
+`trusted-pr-safety` to the required Ruleset until a trusted event has actually
+created that check and its association with the PR's head/merge is verified.
+Some public repositories also restrict `pull_request_target` by policy.
+
+**Critical limitation:** Required checks are identified by job context and
+source application. Another PR-controlled workflow can attempt to publish a
+check with the same job name from GitHub Actions. A truly independently
+authenticated requirement may need a separate trusted GitHub App/check
+producer. Do not claim the Ruleset is tamper-proof until adversarial testing
+confirms a forged or missing check cannot satisfy it.
+
+**Safe activation procedure:** Keep existing 13 required checks untouched.
+Securely activate trusted workflow under a protected main only via an
+explicitly approved PR integration process; verify read-only behavior and
+the actual new check SHA/status; demonstrate negative deletion and workflow
+tampering cases without merging those PRs. Then *add* the trusted check
+to the existing Ruleset, without removing any current requirement. Do not
+change main or merge a PR without the maintainer's express authorization.
