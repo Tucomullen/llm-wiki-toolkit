@@ -16,7 +16,14 @@ LOCKED = frozenset({
 ALLOWED_STATUSES = frozenset({"added", "modified", "removed", "renamed", "copied", "changed"})
 
 
-def evaluate_files(files: list[dict[str, Any]]) -> list[str]:
+def is_protected(path: str) -> bool:
+    parts = path.split("/")
+    return "raw" in parts or parts[-2:] == ["_meta", "LOG.md"] or path in LOCKED
+
+
+def evaluate_files(
+    files: list[dict[str, Any]], existing_base_paths: frozenset[str] = frozenset()
+) -> list[str]:
     errors: list[str] = []
     for entry in files:
         name, status = entry.get("filename"), entry.get("status")
@@ -26,12 +33,8 @@ def evaluate_files(files: list[dict[str, Any]]) -> list[str]:
             raise ValueError(f"Unknown GitHub file status: {status!r}")
         if status in {"removed", "renamed", "copied", "changed"}:
             errors.append(f"Forbidden operation ({status}): {name}")
-        segments = name.split("/")
-        protected = "raw" in segments or segments[-2:] == ["_meta", "LOG.md"]
-        if protected and status != "added":
-            errors.append(f"Existing raw/history content modified: {name}")
-        if name in LOCKED and status != "added":
-            errors.append(f"Trusted security configuration modified: {name}")
+        if is_protected(name) and (status != "added" or name in existing_base_paths):
+            errors.append(f"Protected content already exists on current base or was modified: {name}")
         if status == "renamed":
             previous = entry.get("previous_filename")
             if not isinstance(previous, str) or not previous:
@@ -53,6 +56,30 @@ def get_json(url: str, token: str) -> Any:
         return json.load(response)
 
 
+def current_base_tree(repository: str, ref: str, token: str) -> tuple[str, frozenset[str]]:
+    """Read a single base snapshot; fail closed if the GitHub tree is incomplete."""
+    if ref != "main":
+        raise ValueError("Only protected main can be checked")
+    url = f"https://api.github.com/repos/{repository}"
+    branch = get_json(f"{url}/git/ref/heads/{ref}", token)
+    sha = branch["object"]["sha"]
+    if not isinstance(sha, str) or len(sha) != 40:
+        raise ValueError("Invalid current base SHA")
+    commit = get_json(f"{url}/git/commits/{sha}", token)
+    tree_sha = commit["tree"]["sha"]
+    tree = get_json(f"{url}/git/trees/{tree_sha}?recursive=1", token)
+    if tree.get("truncated") is not False or not isinstance(tree.get("tree"), list):
+        raise ValueError("Cannot inspect complete current base tree")
+    existing: set[str] = set()
+    for item in tree["tree"]:
+        path = item["path"]
+        if not isinstance(path, str) or not path:
+            raise ValueError("Malformed current base tree")
+        if item["type"] in ("blob", "commit"):
+            existing.add(path)
+    return sha, frozenset(existing)
+
+
 def verify_pr(repository: str, number: int, base_sha: str, head_sha: str, token: str) -> list[str]:
     if not repository or number < 1 or not token:
         raise ValueError("Missing repository, PR number or authentication")
@@ -60,6 +87,8 @@ def verify_pr(repository: str, number: int, base_sha: str, head_sha: str, token:
     pr = get_json(prefix, token)
     if pr["base"]["sha"] != base_sha or pr["head"]["sha"] != head_sha:
         raise ValueError("PR head/base changed; rerun on current commit")
+    ref = pr["base"]["ref"]
+    current_sha, base_paths = current_base_tree(repository, ref, token)
     all_files: list[dict[str, Any]] = []
     for page in range(1, 31):
         batch = get_json(f"{prefix}/files?per_page=100&page={page}", token)
@@ -74,7 +103,14 @@ def verify_pr(repository: str, number: int, base_sha: str, head_sha: str, token:
         raise ValueError("File count mismatch; cannot verify complete diff")
     if not all_files:
         raise ValueError("Empty file list; refusing uncertain PR state")
-    return evaluate_files(all_files)
+    # Avoid approving a mixed snapshot if the branch or PR moved during pagination.
+    final_pr = get_json(prefix, token)
+    final_ref = get_json(f"https://api.github.com/repos/{repository}/git/ref/heads/{ref}", token)
+    if (final_pr["base"]["sha"] != base_sha or
+        final_pr["head"]["sha"] != head_sha or
+        final_ref["object"]["sha"] != current_sha):
+        raise ValueError("PR or current base moved during verification")
+    return evaluate_files(all_files, base_paths)
 
 
 def main() -> int:
