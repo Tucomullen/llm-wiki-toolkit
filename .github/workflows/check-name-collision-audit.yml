@@ -1,0 +1,13 @@
+# Temporary harmless security-audit fixture. NEVER merge into main.
+name: Check name collision audit
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  trusted-pr-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Demonstrate duplicate status context from PR-controlled workflow
+        run: echo "AUDIT ONLY - duplicate job name, no policy validation"
