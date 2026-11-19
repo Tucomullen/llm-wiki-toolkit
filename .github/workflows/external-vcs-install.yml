@@ -26,7 +26,7 @@ jobs:
           else
             PY="${{ runner.temp }}/pilot-venv/bin/python"
           fi
-          "$PY" -m pip install "git+https://github.com/Tucomullen/llm-wiki-toolkit.git@a1e8a948341f52fd24eb7bc4683db45f5120e980"
+          "$PY" -m pip install "git+https://github.com/Tucomullen/llm-wiki-toolkit.git"
           "$PY" -m wikikit --version
           "$PY" -m wikikit init "${{ runner.temp }}/first-wiki"
           "$PY" -m wikikit --root "${{ runner.temp }}/first-wiki" verify --fail-on-broken
