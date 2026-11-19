@@ -1,0 +1,29 @@
+# Runs only from protected default-branch workflow revision.
+# Never check out, build, import or run code from PR head in this event.
+name: Trusted PR Safety
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  trusted-pr-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out trusted base-branch policy only
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check PR file metadata using GitHub API without executing PR code
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python scripts/trusted_pr_policy.py

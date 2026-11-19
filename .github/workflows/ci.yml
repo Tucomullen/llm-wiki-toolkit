@@ -6,6 +6,27 @@ on:
   pull_request:
 
 jobs:
+  safety:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Never execute PR-controlled policy code. The trusted tool comes from an
+      # immutable commit, stored in a separate path outside the PR checkout.
+      - name: Checkout immutable trusted security policy
+        uses: actions/checkout@v4
+        with:
+          ref: 1b474c31c8aa6dff0d5d2a17fc0c8ce75a17a435
+          path: _trusted_safety
+          persist-credentials: false
+      - name: Verify trusted security policy against PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python _trusted_safety/scripts/trusted_safety_policy.py --base "$BASE_SHA" --head "$HEAD_SHA"
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -18,14 +39,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install
-        run: python -m pip install .
+      - name: Build wheel from source
+        run: python -m pip wheel --no-deps --wheel-dir dist .
+      - name: Install built wheel
+        shell: bash
+        run: python -m pip install --no-deps dist/*.whl
       - name: Unit tests
         run: python -m unittest discover -s tests -v
-      - name: Demo smoke test
-        shell: bash
-        run: |
-          cp -r examples/demo-wiki "$RUNNER_TEMP/demo"
-          cd "$RUNNER_TEMP/demo"
-          wikikit split-index _meta/INDEX.md
-          wikikit verify --fail-on-broken
+      - name: Full end-to-end smoke test
+        run: python scripts/smoke_test.py
