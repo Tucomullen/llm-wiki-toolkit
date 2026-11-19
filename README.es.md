@@ -11,12 +11,17 @@ Python 3.10+, solo libreria estandar en el nucleo. Windows, macOS y Linux.
 
 ## Instalacion
 
+**Primera vez:** sigue la [guía de primera ejecución](docs/FIRST_RUN.md) para instalar desde GitHub sin clonar, crear una wiki, añadir una página, buscar y verificar el resultado en Windows, macOS o Linux. La guía está redactada en inglés; los comandos son independientes de la plataforma.
+
+Los siguientes comandos requieren tener una copia local del repositorio; **no** se refieren a PyPI:
+
+
 ```bash
 pip install .          # nucleo
 pip install .[docs]    # anade extraccion de .docx / .pdf / .pptx
 ```
 
-## Inicio rapido con la demo
+## Demo con los archivos del repositorio
 
 ```bash
 cp -r examples/demo-wiki /tmp/jardin && cd /tmp/jardin
