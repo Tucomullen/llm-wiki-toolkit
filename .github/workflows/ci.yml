@@ -13,8 +13,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Protect historical/source files and prevent deletions
+      - name: Protect historical/source files and prevent deletions (existing guard)
         run: python scripts/safety_guard.py --compare '${{ github.event.pull_request.base.sha }}' '${{ github.event.pull_request.head.sha }}'
+      # Never execute PR-controlled policy code. The trusted tool comes from an
+      # immutable commit, stored in a separate path outside the PR checkout.
+      - name: Checkout immutable trusted security policy
+        uses: actions/checkout@v4
+        with:
+          ref: 1b474c31c8aa6dff0d5d2a17fc0c8ce75a17a435
+          path: _trusted_safety
+          persist-credentials: false
+      - name: Verify trusted security policy against PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python _trusted_safety/scripts/trusted_safety_policy.py --base "$BASE_SHA" --head "$HEAD_SHA"
+      - name: Run trusted policy regression tests
+        run: python -m unittest discover -s _trusted_safety/tests -p 'test_trusted_safety_policy.py' -v
 
   test:
     runs-on: ${{ matrix.os }}
